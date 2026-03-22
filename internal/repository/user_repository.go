@@ -1,5 +1,5 @@
 // internal/repository/user_repository.go
-// DBを操作する場所
+// dbを操作する場所
 package repository
 
 import (
@@ -10,11 +10,58 @@ import (
 )
 
 type UserRepository struct {
-	DB *pgxpool.Pool
+	db *pgxpool.Pool
 }
 
 func NewUserRepository(db *pgxpool.Pool) *UserRepository {
-	return &UserRepository{DB: db}
+	return &UserRepository{db: db}
+}
+
+func (r *UserRepository) FindByID(userID int64) (*model.User, error) {
+	var user model.User
+
+	err := r.db.QueryRow(context.Background(), `
+		select
+			id,
+			clerk_user_id,
+			role,
+			user_name,
+			email,
+			stripe_customer_id,
+			status,
+			created_at,
+			updated_at,
+			deleted_at
+		from public.users
+		where id = $1
+	`, userID).Scan(
+		&user.ID,
+		&user.ClerkUserID,
+		&user.Role,
+		&user.UserName,
+		&user.Email,
+		&user.StripeCustomerID,
+		&user.Status,
+		&user.CreatedAt,
+		&user.UpdatedAt,
+		&user.DeletedAt,
+	)
+	if err != nil {
+		return nil, err
+	}
+
+	return &user, nil
+}
+
+func (r *UserRepository) UpdateStripeCustomerID(userID int64, stripeCustomerID string) error {
+	_, err := r.db.Exec(context.Background(), `
+		update public.users
+		set stripe_customer_id = $1,
+		    updated_at = now()
+		where id = $2
+	`, stripeCustomerID, userID)
+
+	return err
 }
 
 func (r *UserRepository) GetByClerkUserID(ctx context.Context, clerkUserID string) (*model.User, error) {
@@ -36,7 +83,7 @@ func (r *UserRepository) GetByClerkUserID(ctx context.Context, clerkUserID strin
 	`
 
 	var user model.User
-	err := r.DB.QueryRow(ctx, query, clerkUserID).Scan(
+	err := r.db.QueryRow(ctx, query, clerkUserID).Scan(
 		&user.ID,
 		&user.ClerkUserID,
 		&user.Role,
@@ -55,7 +102,7 @@ func (r *UserRepository) GetByClerkUserID(ctx context.Context, clerkUserID strin
 }
 
 func (r *UserRepository) GetUsers(ctx context.Context) ([]model.User, error) {
-	rows, err := r.DB.Query(ctx, `
+	rows, err := r.db.Query(ctx, `
 		select
 			id,
 			clerk_user_id,
@@ -114,7 +161,7 @@ func (r *UserRepository) UpsertUser(ctx context.Context, user model.User) error 
 			deleted_at = NULL,
 			updated_at = NOW()
 	`
-	_, err := r.DB.Exec(ctx, query,
+	_, err := r.db.Exec(ctx, query,
 		user.ClerkUserID,
 		user.Email,
 		user.UserName,
@@ -132,6 +179,6 @@ func (r *UserRepository) DeleteUserByClerkID(ctx context.Context, clerkUserID st
 		    updated_at = NOW()
 		WHERE clerk_user_id = $1
 	`
-	_, err := r.DB.Exec(ctx, query, clerkUserID)
+	_, err := r.db.Exec(ctx, query, clerkUserID)
 	return err
 }

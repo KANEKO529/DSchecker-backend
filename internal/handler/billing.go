@@ -6,6 +6,7 @@ package handler
 
 import (
 	"net/http"
+	"log"
 
 	"github.com/gin-gonic/gin"
 
@@ -40,8 +41,10 @@ func (h *BillingHandler) CreateCheckoutSession(c *gin.Context) {
 	}
 
 	checkoutURL, err := h.billingService.CreateCheckoutSession(email, userID)
+
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to create checkout session"})
+		log.Printf("[CHECKOUT ERROR] %+v", err)
+		c.JSON(500, gin.H{"error": err.Error()})
 		return
 	}
 

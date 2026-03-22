@@ -38,13 +38,21 @@ func SetupRouter(db *pgxpool.Pool, stripeCfg *lib.StripeConfig) *gin.Engine {
 	r.GET("/health", handler.Health)
 
 	userRepo := repository.NewUserRepository(db)
+	subscriptionRepo := repository.NewSubscriptionRepository(db)
+
 
 	userHandler := handler.NewUserHandler(userRepo)
 
 	clerkWebhookService := service.NewClerkWebhookService(userRepo)
 	clerkWebhookHandler := handler.NewClerkWebhookHandler(clerkWebhookService)
 
-	billingService := service.NewBillingService(stripeCfg)
+	stripeWebhookService := service.NewStripeWebhookService(subscriptionRepo)
+	stripeWebhookHandler := handler.NewStripeWebhookHandler(
+		stripeWebhookService,
+		stripeCfg,
+	)
+	
+	billingService := service.NewBillingService(stripeCfg, userRepo)
 	billingHandler := handler.NewBillingHandler(billingService)
 
 	verifier, err := auth.NewClerkVerifier()
@@ -58,6 +66,7 @@ func SetupRouter(db *pgxpool.Pool, stripeCfg *lib.StripeConfig) *gin.Engine {
 	{
 		api.GET("/users", userHandler.GetUsers)
 		api.POST("/webhooks/clerk", clerkWebhookHandler.Handle)
+		api.POST("/webhooks/stripe", stripeWebhookHandler.Handle)
 
 		protected := api.Group("")
 		protected.Use(authMiddleware.RequireAuth())
