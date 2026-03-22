@@ -1,5 +1,5 @@
+// internal/repository/user_repository.go
 // DBを操作する場所
-//
 package repository
 
 import (
@@ -15,6 +15,43 @@ type UserRepository struct {
 
 func NewUserRepository(db *pgxpool.Pool) *UserRepository {
 	return &UserRepository{DB: db}
+}
+
+func (r *UserRepository) GetByClerkUserID(ctx context.Context, clerkUserID string) (*model.User, error) {
+	query := `
+		SELECT
+			id,
+			clerk_user_id,
+			role,
+			user_name,
+			email,
+			status,
+			created_at,
+			updated_at,
+			deleted_at
+		FROM public.users
+		WHERE clerk_user_id = $1
+		  AND deleted_at IS NULL
+		LIMIT 1
+	`
+
+	var user model.User
+	err := r.DB.QueryRow(ctx, query, clerkUserID).Scan(
+		&user.ID,
+		&user.ClerkUserID,
+		&user.Role,
+		&user.UserName,
+		&user.Email,
+		&user.Status,
+		&user.CreatedAt,
+		&user.UpdatedAt,
+		&user.DeletedAt,
+	)
+	if err != nil {
+		return nil, err
+	}
+
+	return &user, nil
 }
 
 func (r *UserRepository) GetUsers(ctx context.Context) ([]model.User, error) {
