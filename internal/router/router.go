@@ -8,6 +8,7 @@ import (
 
 	"dscheckerapp/internal/auth"
 	"dscheckerapp/internal/handler"
+	"dscheckerapp/internal/lib"
 	"dscheckerapp/internal/middleware"
 	"dscheckerapp/internal/repository"
 	"dscheckerapp/internal/service"
@@ -17,7 +18,7 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
-func SetupRouter(db *pgxpool.Pool) *gin.Engine {
+func SetupRouter(db *pgxpool.Pool, stripeCfg *lib.StripeConfig) *gin.Engine {
 	r := gin.Default()
 
 	frontendOrigin := os.Getenv("CORS_ORIGIN")
@@ -43,6 +44,9 @@ func SetupRouter(db *pgxpool.Pool) *gin.Engine {
 	clerkWebhookService := service.NewClerkWebhookService(userRepo)
 	clerkWebhookHandler := handler.NewClerkWebhookHandler(clerkWebhookService)
 
+	billingService := service.NewBillingService(stripeCfg)
+	billingHandler := handler.NewBillingHandler(billingService)
+
 	verifier, err := auth.NewClerkVerifier()
 	if err != nil {
 		log.Fatalf("failed to initialize clerk verifier: %v", err)
@@ -59,6 +63,7 @@ func SetupRouter(db *pgxpool.Pool) *gin.Engine {
 		protected.Use(authMiddleware.RequireAuth())
 		{
 			protected.GET("/me", userHandler.Me)
+			protected.POST("/billing/checkout-session", billingHandler.CreateCheckoutSession)
 		}
 	}
 
