@@ -4,7 +4,8 @@ package handler
 import (
 	"io"
 	"net/http"
-
+	"context"
+	"log"
 	"dscheckerapp/internal/lib"
 
 	"github.com/gin-gonic/gin"
@@ -13,7 +14,7 @@ import (
 )
 
 type StripeWebhookService interface {
-	HandleEvent(event stripe.Event) error
+	HandleEvent(ctx context.Context, event stripe.Event) error
 }
 
 type StripeWebhookHandler struct {
@@ -34,6 +35,7 @@ func NewStripeWebhookHandler(
 func (h *StripeWebhookHandler) Handle(c *gin.Context) {
 	payload, err := io.ReadAll(c.Request.Body)
 	if err != nil {
+		log.Printf("[STRIPE WEBHOOK ERROR] failed to read request body: %v", err)
 		c.JSON(http.StatusBadRequest, gin.H{"error": "failed to read request body"})
 		return
 	}
@@ -44,14 +46,19 @@ func (h *StripeWebhookHandler) Handle(c *gin.Context) {
 		h.cfg.WebhookSecret,
 	)
 	if err != nil {
+		log.Printf("[STRIPE WEBHOOK ERROR] invalid signature: %v", err)
 		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid stripe signature"})
 		return
 	}
 
-	if err := h.service.HandleEvent(event); err != nil {
+	log.Printf("[STRIPE WEBHOOK] received event: id=%s type=%s", event.ID, event.Type)
+
+	if err := h.service.HandleEvent(c.Request.Context(), event); err != nil {
+		log.Printf("[STRIPE WEBHOOK ERROR] failed to handle event: id=%s type=%s err=%v", event.ID, event.Type, err)
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
 
+	log.Printf("[STRIPE WEBHOOK] handled successfully: id=%s type=%s", event.ID, event.Type)
 	c.JSON(http.StatusOK, gin.H{"received": true})
 }

@@ -2,6 +2,7 @@
 package service
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"time"
@@ -10,9 +11,14 @@ import (
 	"github.com/stripe/stripe-go/v84"
 )
 
+// type SubscriptionRepository interface {
+// 	FindUserIDByStripeCustomerID(customerID string) (int64, error)
+// 	UpsertSubscription(input model.UpsertSubscriptionInput) error
+// }
+
 type SubscriptionRepository interface {
-	FindUserIDByStripeCustomerID(customerID string) (int64, error)
-	UpsertSubscription(input model.UpsertSubscriptionInput) error
+	FindUserIDByStripeCustomerID(ctx context.Context, customerID string) (int64, error)
+	UpsertSubscription(ctx context.Context, input model.UpsertSubscriptionInput) error
 }
 
 type StripeWebhookService struct {
@@ -25,18 +31,19 @@ func NewStripeWebhookService(subscriptionRepo SubscriptionRepository) *StripeWeb
 	}
 }
 
-func (s *StripeWebhookService) HandleEvent(event stripe.Event) error {
+func (s *StripeWebhookService) HandleEvent(ctx context.Context, event stripe.Event) error {
 	switch event.Type {
 	case "customer.subscription.created",
 		"customer.subscription.updated",
 		"customer.subscription.deleted":
-		return s.handleSubscriptionEvent(event)
+		return s.handleSubscriptionEvent(ctx, event)
 	default:
 		return nil
 	}
 }
 
-func (s *StripeWebhookService) handleSubscriptionEvent(event stripe.Event) error {
+
+func (s *StripeWebhookService) handleSubscriptionEvent(ctx context.Context, event stripe.Event) error {
 	var sub stripe.Subscription
 	if err := json.Unmarshal(event.Data.Raw, &sub); err != nil {
 		return err
@@ -47,7 +54,7 @@ func (s *StripeWebhookService) handleSubscriptionEvent(event stripe.Event) error
 		return errors.New("missing stripe customer id")
 	}
 
-	userID, err := s.subscriptionRepo.FindUserIDByStripeCustomerID(customerID)
+	userID, err := s.subscriptionRepo.FindUserIDByStripeCustomerID(ctx, customerID)
 	if err != nil {
 		return err
 	}
@@ -81,7 +88,7 @@ func (s *StripeWebhookService) handleSubscriptionEvent(event stripe.Event) error
 		LatestEventID:        event.ID,
 	}
 
-	return s.subscriptionRepo.UpsertSubscription(input)
+	return s.subscriptionRepo.UpsertSubscription(ctx, input)
 }
 
 func unixToTimePtr(ts int64) *time.Time {

@@ -4,6 +4,7 @@ package repository
 
 import (
 	"context"
+	"fmt"
 
 	"dscheckerapp/internal/model"
 	"github.com/jackc/pgx/v5/pgxpool"
@@ -16,6 +17,7 @@ type UserRepository struct {
 func NewUserRepository(db *pgxpool.Pool) *UserRepository {
 	return &UserRepository{db: db}
 }
+
 
 func (r *UserRepository) FindByID(userID int64) (*model.User, error) {
 	var user model.User
@@ -53,15 +55,22 @@ func (r *UserRepository) FindByID(userID int64) (*model.User, error) {
 	return &user, nil
 }
 
-func (r *UserRepository) UpdateStripeCustomerID(userID int64, stripeCustomerID string) error {
-	_, err := r.db.Exec(context.Background(), `
+func (r *UserRepository) UpdateStripeCustomerID(ctx context.Context, userID int64, stripeCustomerID string) error {
+	// DBの実行結果は ct に入っている
+	ct, err := r.db.Exec(ctx, `
 		update public.users
 		set stripe_customer_id = $1,
 		    updated_at = now()
 		where id = $2
 	`, stripeCustomerID, userID)
+	if err != nil {
+		return err
+	}
 
-	return err
+	if ct.RowsAffected() == 0 {
+		return fmt.Errorf("user not found: user_id=%d", userID)
+	}
+	return nil
 }
 
 func (r *UserRepository) GetByClerkUserID(ctx context.Context, clerkUserID string) (*model.User, error) {
@@ -72,6 +81,7 @@ func (r *UserRepository) GetByClerkUserID(ctx context.Context, clerkUserID strin
 			role,
 			user_name,
 			email,
+			stripe_customer_id,
 			status,
 			created_at,
 			updated_at,
@@ -89,6 +99,7 @@ func (r *UserRepository) GetByClerkUserID(ctx context.Context, clerkUserID strin
 		&user.Role,
 		&user.UserName,
 		&user.Email,
+		&user.StripeCustomerID,
 		&user.Status,
 		&user.CreatedAt,
 		&user.UpdatedAt,

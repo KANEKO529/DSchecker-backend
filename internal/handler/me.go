@@ -4,6 +4,7 @@ package handler
 import (
 	"errors"
 	"net/http"
+	"log"
 
 	"github.com/gin-gonic/gin"
 	"github.com/jackc/pgx/v5"
@@ -30,6 +31,8 @@ func (h *UserHandler) Me(c *gin.Context) {
 
 	user, err := h.UserRepo.GetByClerkUserID(c.Request.Context(), clerkUserID)
 	if err != nil {
+		log.Printf("[ME] GetByClerkUserID error: %#v", err)
+	
 		if errors.Is(err, pgx.ErrNoRows) {
 			c.JSON(http.StatusNotFound, gin.H{
 				"status": "error",
@@ -37,10 +40,10 @@ func (h *UserHandler) Me(c *gin.Context) {
 			})
 			return
 		}
-
+	
 		c.JSON(http.StatusInternalServerError, gin.H{
 			"status": "error",
-			"error":  "failed to fetch user",
+			"error":  err.Error(),
 		})
 		return
 	}

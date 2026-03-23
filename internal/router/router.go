@@ -37,23 +37,25 @@ func SetupRouter(db *pgxpool.Pool, stripeCfg *lib.StripeConfig) *gin.Engine {
 
 	r.GET("/health", handler.Health)
 
+	// repository
 	userRepo := repository.NewUserRepository(db)
 	subscriptionRepo := repository.NewSubscriptionRepository(db)
 
-
-	userHandler := handler.NewUserHandler(userRepo)
-
+	// service
 	clerkWebhookService := service.NewClerkWebhookService(userRepo)
-	clerkWebhookHandler := handler.NewClerkWebhookHandler(clerkWebhookService)
-
 	stripeWebhookService := service.NewStripeWebhookService(subscriptionRepo)
+	billingService := service.NewBillingService(stripeCfg, userRepo, subscriptionRepo)
+	subscriptionService := service.NewSubscriptionService(userRepo, subscriptionRepo)
+
+	// handler
+	userHandler := handler.NewUserHandler(userRepo)
+	clerkWebhookHandler := handler.NewClerkWebhookHandler(clerkWebhookService)
 	stripeWebhookHandler := handler.NewStripeWebhookHandler(
 		stripeWebhookService,
 		stripeCfg,
 	)
-	
-	billingService := service.NewBillingService(stripeCfg, userRepo)
 	billingHandler := handler.NewBillingHandler(billingService)
+	subscriptionHandler := handler.NewSubscriptionHandler(subscriptionService)
 
 	verifier, err := auth.NewClerkVerifier()
 	if err != nil {
@@ -72,6 +74,7 @@ func SetupRouter(db *pgxpool.Pool, stripeCfg *lib.StripeConfig) *gin.Engine {
 		protected.Use(authMiddleware.RequireAuth())
 		{
 			protected.GET("/me", userHandler.Me)
+			protected.GET("/me/subscription", subscriptionHandler.GetMySubscription)
 			protected.POST("/billing/checkout-session", billingHandler.CreateCheckoutSession)
 		}
 	}
