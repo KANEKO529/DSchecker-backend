@@ -11,7 +11,10 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
-var ErrSubscriptionNotFound = errors.New("subscription not found")
+
+var (
+	ErrSubscriptionNotFound = errors.New("subscription not found")
+)
 
 type SubscriptionRepository struct {
 	db *pgxpool.Pool

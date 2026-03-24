@@ -18,18 +18,29 @@ type UserQueryRepository interface {
 	GetByClerkUserID(ctx context.Context, clerkUserID string) (*model.User, error)
 }
 
+// stripe送信用
+type StripeSubscriptionClient interface {
+	CancelAtPeriodEnd(ctx context.Context, stripeSubscriptionID string) error
+}
+
 type SubscriptionService struct {
 	userRepo         UserQueryRepository
 	subscriptionRepo SubscriptionQueryRepository
+	stripeClient     StripeSubscriptionClient
 }
+
+var ErrSubscriptionNotCancelable = errors.New("subscription not cancelable")
+var ErrSubscriptionNotResumable = errors.New("subscription not resumable")
 
 func NewSubscriptionService(
 	userRepo UserQueryRepository,
 	subscriptionRepo SubscriptionQueryRepository,
+	stripeClient StripeSubscriptionClient,
 ) *SubscriptionService {
 	return &SubscriptionService{
 		userRepo:         userRepo,
 		subscriptionRepo: subscriptionRepo,
+		stripeClient:     stripeClient,
 	}
 }
 
@@ -81,3 +92,64 @@ func isActiveSubscription(status string, endedAt *time.Time) bool {
 		return false
 	}
 }
+
+
+func (s *SubscriptionService) CancelMySubscriptionByClerkUserID(
+	ctx context.Context,
+	clerkUserID string,
+) error {
+	user, err := s.userRepo.GetByClerkUserID(ctx, clerkUserID)
+	if err != nil {
+		return err
+	}
+
+	return s.CancelMySubscription(ctx, user.ID)
+}
+
+// ① 現在の契約を確認
+// ② 解約できるか判定
+// ③ Stripeに命令を送る
+// ④ 終わり（DB更新しない）
+func (s *SubscriptionService) CancelMySubscription(
+	ctx context.Context,
+	userID int64,
+) error {
+
+	// ① 現在の契約を確認
+	sub, err := s.subscriptionRepo.FindLatestByUserID(ctx, userID)
+	if err != nil {
+		return err
+	}
+
+	if sub.StripeSubscriptionID == "" {
+		return repository.ErrSubscriptionNotFound
+	}
+
+	// すでに終了している契約は解約予約できない
+	if sub.EndedAt != nil {
+		return ErrSubscriptionNotCancelable
+	}
+
+	// status 判定
+	// active, trialingのみを通す
+	// もし、それ以外ならエラー
+	switch sub.Status {
+	case "active", "trialing":
+	default:
+		return ErrSubscriptionNotCancelable
+	}
+
+	// すでに解約予約済みなら何もしない
+	// 冪等性
+	if sub.CancelAtPeriodEnd {
+		return nil
+	}
+
+	if err := s.stripeClient.CancelAtPeriodEnd(ctx, sub.StripeSubscriptionID); err != nil {
+		return err
+	}
+
+	return nil
+}
+
+

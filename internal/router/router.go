@@ -37,6 +37,10 @@ func SetupRouter(db *pgxpool.Pool, stripeCfg *lib.StripeConfig) *gin.Engine {
 
 	r.GET("/health", handler.Health)
 
+	// lib
+	stripeClient := lib.NewStripeClient()
+
+
 	// repository
 	userRepo := repository.NewUserRepository(db)
 	subscriptionRepo := repository.NewSubscriptionRepository(db)
@@ -45,7 +49,11 @@ func SetupRouter(db *pgxpool.Pool, stripeCfg *lib.StripeConfig) *gin.Engine {
 	clerkWebhookService := service.NewClerkWebhookService(userRepo)
 	stripeWebhookService := service.NewStripeWebhookService(subscriptionRepo)
 	billingService := service.NewBillingService(stripeCfg, userRepo, subscriptionRepo)
-	subscriptionService := service.NewSubscriptionService(userRepo, subscriptionRepo)
+	subscriptionService := service.NewSubscriptionService(
+		userRepo,
+		subscriptionRepo,
+		stripeClient,
+	)
 
 	// handler
 	userHandler := handler.NewUserHandler(userRepo)
@@ -75,6 +83,7 @@ func SetupRouter(db *pgxpool.Pool, stripeCfg *lib.StripeConfig) *gin.Engine {
 		{
 			protected.GET("/me", userHandler.Me)
 			protected.GET("/me/subscription", subscriptionHandler.GetMySubscription)
+			protected.POST("/me/subscription/cancel", subscriptionHandler.CancelMySubscription)
 			protected.POST("/billing/checkout-session", billingHandler.CreateCheckoutSession)
 		}
 	}

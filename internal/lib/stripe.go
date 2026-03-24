@@ -6,9 +6,15 @@ package lib
 import (
 	"fmt"
 	"os"
+	"context"
 
 	"github.com/stripe/stripe-go/v84"
+	stripeSub "github.com/stripe/stripe-go/v84/subscription"
 )
+
+type StripeSubscriptionClient interface {
+	CancelAtPeriodEnd(ctx context.Context, stripeSubscriptionID string) error
+}
 
 type StripeConfig struct {
 	SecretKey     string
@@ -16,6 +22,15 @@ type StripeConfig struct {
 	PriceID       string
 	AppURL        string
 }
+
+type StripeClient struct {
+
+}
+
+func NewStripeClient() *StripeClient {
+	return &StripeClient{}
+}
+
 
 func LoadStripeConfig() (*StripeConfig, error) {
 	cfg := &StripeConfig{
@@ -43,4 +58,15 @@ func LoadStripeConfig() (*StripeConfig, error) {
 
 func InitStripe(cfg *StripeConfig) {
 	stripe.Key = cfg.SecretKey
+}
+
+// 外部API通信
+func (c *StripeClient) CancelAtPeriodEnd(ctx context.Context, stripeSubscriptionID string) error {
+	params := &stripe.SubscriptionParams{
+		CancelAtPeriodEnd: stripe.Bool(true),
+	}
+	params.Context = ctx
+
+	_, err := stripeSub.Update(stripeSubscriptionID, params)
+	return err
 }
