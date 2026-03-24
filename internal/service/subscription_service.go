@@ -21,6 +21,7 @@ type UserQueryRepository interface {
 // stripe送信用
 type StripeSubscriptionClient interface {
 	CancelAtPeriodEnd(ctx context.Context, stripeSubscriptionID string) error
+	ResumeSubscription(ctx context.Context, stripeSubscriptionID string) error
 }
 
 type SubscriptionService struct {
@@ -146,6 +147,53 @@ func (s *SubscriptionService) CancelMySubscription(
 	}
 
 	if err := s.stripeClient.CancelAtPeriodEnd(ctx, sub.StripeSubscriptionID); err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func (s *SubscriptionService) ResumeMySubscriptionByClerkUserID(
+	ctx context.Context,
+	clerkUserID string,
+) error {
+	user, err := s.userRepo.GetByClerkUserID(ctx, clerkUserID)
+	if err != nil {
+		return err
+	}
+
+	return s.ResumeMySubscription(ctx, user.ID)
+}
+
+func (s *SubscriptionService) ResumeMySubscription(
+	ctx context.Context,
+	userID int64,
+) error {
+	sub, err := s.subscriptionRepo.FindLatestByUserID(ctx, userID)
+	if err != nil {
+		return err
+	}
+
+	if sub.StripeSubscriptionID == "" {
+		return repository.ErrSubscriptionNotFound
+	}
+
+	if sub.EndedAt != nil {
+		return ErrSubscriptionNotResumable
+	}
+
+	switch sub.Status {
+	case "active", "trialing":
+	default:
+		return ErrSubscriptionNotResumable
+	}
+
+	// すでに継続状態なら成功扱い
+	if !sub.CancelAtPeriodEnd {
+		return nil
+	}
+
+	if err := s.stripeClient.ResumeSubscription(ctx, sub.StripeSubscriptionID); err != nil {
 		return err
 	}
 

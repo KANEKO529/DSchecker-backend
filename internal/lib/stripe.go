@@ -12,9 +12,10 @@ import (
 	stripeSub "github.com/stripe/stripe-go/v84/subscription"
 )
 
-type StripeSubscriptionClient interface {
-	CancelAtPeriodEnd(ctx context.Context, stripeSubscriptionID string) error
-}
+// type StripeSubscriptionClient interface {
+// 	CancelAtPeriodEnd(ctx context.Context, stripeSubscriptionID string) error
+// 	ResumeSubscription(ctx context.Context, stripeSubscriptionID string) error
+// }
 
 type StripeConfig struct {
 	SecretKey     string
@@ -64,6 +65,17 @@ func InitStripe(cfg *StripeConfig) {
 func (c *StripeClient) CancelAtPeriodEnd(ctx context.Context, stripeSubscriptionID string) error {
 	params := &stripe.SubscriptionParams{
 		CancelAtPeriodEnd: stripe.Bool(true),
+	}
+	params.Context = ctx
+
+	_, err := stripeSub.Update(stripeSubscriptionID, params)
+	return err
+}
+
+// 解約取り消し
+func (c *StripeClient) ResumeSubscription(ctx context.Context, stripeSubscriptionID string) error {
+	params := &stripe.SubscriptionParams{
+		CancelAtPeriodEnd: stripe.Bool(false),
 	}
 	params.Context = ctx
 

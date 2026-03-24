@@ -82,8 +82,11 @@ func SetupRouter(db *pgxpool.Pool, stripeCfg *lib.StripeConfig) *gin.Engine {
 		protected.Use(authMiddleware.RequireAuth())
 		{
 			protected.GET("/me", userHandler.Me)
+			
 			protected.GET("/me/subscription", subscriptionHandler.GetMySubscription)
 			protected.POST("/me/subscription/cancel", subscriptionHandler.CancelMySubscription)
+			protected.POST("/me/subscription/resume", subscriptionHandler.ResumeMySubscription)
+
 			protected.POST("/billing/checkout-session", billingHandler.CreateCheckoutSession)
 		}
 	}
