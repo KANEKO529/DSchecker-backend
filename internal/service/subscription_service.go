@@ -11,7 +11,7 @@ import (
 )
 
 type SubscriptionQueryRepository interface {
-	FindLatestByUserID(ctx context.Context, userID int64) (*model.Subscription, error)
+	FindCurrentByUserID(ctx context.Context, userID int64) (*model.Subscription, error)
 }
 
 type UserQueryRepository interface {
@@ -61,7 +61,7 @@ func (s *SubscriptionService) GetMySubscription(
 	ctx context.Context,
 	userID int64,
 ) (*model.SubscriptionResponse, error) {
-	sub, err := s.subscriptionRepo.FindLatestByUserID(ctx, userID)
+	sub, err := s.subscriptionRepo.FindCurrentByUserID(ctx, userID)
 	if err != nil {
 		if errors.Is(err, repository.ErrSubscriptionNotFound) {
 			return nil, nil
@@ -117,7 +117,7 @@ func (s *SubscriptionService) CancelMySubscription(
 ) error {
 
 	// ① 現在の契約を確認
-	sub, err := s.subscriptionRepo.FindLatestByUserID(ctx, userID)
+	sub, err := s.subscriptionRepo.FindCurrentByUserID(ctx, userID)
 	if err != nil {
 		return err
 	}
@@ -169,7 +169,7 @@ func (s *SubscriptionService) ResumeMySubscription(
 	ctx context.Context,
 	userID int64,
 ) error {
-	sub, err := s.subscriptionRepo.FindLatestByUserID(ctx, userID)
+	sub, err := s.subscriptionRepo.FindCurrentByUserID(ctx, userID)
 	if err != nil {
 		return err
 	}

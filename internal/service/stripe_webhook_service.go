@@ -11,11 +11,6 @@ import (
 	"github.com/stripe/stripe-go/v84"
 )
 
-// type SubscriptionRepository interface {
-// 	FindUserIDByStripeCustomerID(customerID string) (int64, error)
-// 	UpsertSubscription(input model.UpsertSubscriptionInput) error
-// }
-
 type SubscriptionRepository interface {
 	FindUserIDByStripeCustomerID(ctx context.Context, customerID string) (int64, error)
 	UpsertSubscription(ctx context.Context, input model.UpsertSubscriptionInput) error
