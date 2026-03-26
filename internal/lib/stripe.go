@@ -10,6 +10,8 @@ import (
 
 	"github.com/stripe/stripe-go/v84"
 	stripeSub "github.com/stripe/stripe-go/v84/subscription"
+	stripeCustomer "github.com/stripe/stripe-go/v84/customer"
+	stripePaymentMethod "github.com/stripe/stripe-go/v84/paymentmethod"
 )
 
 // type StripeSubscriptionClient interface {
@@ -81,4 +83,25 @@ func (c *StripeClient) ResumeSubscription(ctx context.Context, stripeSubscriptio
 
 	_, err := stripeSub.Update(stripeSubscriptionID, params)
 	return err
+}
+
+func (c *StripeClient) GetSubscription(ctx context.Context, stripeSubscriptionID string) (*stripe.Subscription, error) {
+	params := &stripe.SubscriptionParams{}
+	params.Context = ctx
+	return stripeSub.Get(stripeSubscriptionID, params)
+}
+func (c *StripeClient) GetCustomer(ctx context.Context, stripeCustomerID string) (*stripe.Customer, error) {
+	params := &stripe.CustomerParams{}
+	params.Context = ctx
+	return stripeCustomer.Get(stripeCustomerID, params)
+}
+
+func (c *StripeClient) GetPaymentMethod(ctx context.Context, paymentMethodID string) (*stripe.PaymentMethod, error) {
+	params := &stripe.PaymentMethodParams{}
+	params.Context = ctx
+
+	// 👇これ追加
+	params.AddExpand("card")
+
+	return stripePaymentMethod.Get(paymentMethodID, params)
 }

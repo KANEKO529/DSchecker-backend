@@ -25,6 +25,8 @@ func NewSubscriptionRepository(db *pgxpool.Pool) *SubscriptionRepository {
 }
 
 // checkout 用
+// FindByUserID returns the current subscription for the user.
+// If no current subscription exists, it returns nil, nil.
 func (r *SubscriptionRepository) FindByUserID(ctx context.Context, userID int64) (*model.Subscription, error) {
 	sub, err := r.FindCurrentByUserID(ctx, userID)
 	if err != nil {
