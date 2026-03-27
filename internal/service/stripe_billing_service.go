@@ -122,7 +122,11 @@ func (s *BillingService) CreateCheckoutSession(ctx context.Context, customerEmai
 		},
 		ClientReferenceID: stripe.String(clerkUserID),
 		Customer:          stripe.String(stripeCustomerID),
+		BillingAddressCollection: stripe.String("required"),
 	}
+
+	// 保存同意UIを出す
+	params.AddExtra("saved_payment_method_options[payment_method_save]", "enabled")
 
 	session, err := stripeCheckoutSession.New(params)
 	if err != nil {
