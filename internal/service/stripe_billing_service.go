@@ -34,12 +34,31 @@ type BillingService struct {
 	subscriptionRepo BillingSubscriptionRepository
 }
 
-type PaymentMethodDTO struct {
-	ID       string `json:"id"`
-	Brand    string `json:"brand"`
-	Last4    string `json:"last4"`
-	ExpMonth int64  `json:"exp_month"`
-	ExpYear  int64  `json:"exp_year"`
+type PaymentMethodItem struct {
+	ID        string `json:"id"`
+	Brand     string `json:"brand"`
+	Last4     string `json:"last4"`
+	ExpMonth  int64  `json:"expMonth"`
+	ExpYear   int64  `json:"expYear"`
+	IsDefault bool   `json:"isDefault"`
+
+	BillingDetails BillingDetails `json:"billingDetails"`
+}
+
+type BillingDetails struct {
+	Name    string         `json:"name"`
+	Email   string         `json:"email"`
+	Phone   string         `json:"phone"`
+	Address BillingAddress `json:"address"`
+}
+
+type BillingAddress struct {
+	Country    string `json:"country"`
+	PostalCode string `json:"postalCode"`
+	State      string `json:"state"`
+	City       string `json:"city"`
+	Line1      string `json:"line1"`
+	Line2      string `json:"line2"`
 }
 
 func NewBillingService(
@@ -123,6 +142,9 @@ func (s *BillingService) CreateCheckoutSession(ctx context.Context, customerEmai
 		ClientReferenceID: stripe.String(clerkUserID),
 		Customer:          stripe.String(stripeCustomerID),
 		BillingAddressCollection: stripe.String("required"),
+		PhoneNumberCollection: &stripe.CheckoutSessionPhoneNumberCollectionParams{
+			Enabled: stripe.Bool(true),
+		},
 	}
 
 	// 保存同意UIを出す
@@ -147,70 +169,73 @@ func (s *BillingService) CreateCheckoutSession(ctx context.Context, customerEmai
 // subscription.stripe_subscription_id があれば Stripe で subscription を取得
 // default_payment_method がなければ user.stripe_customer_id から customer を取得
 // payment method を取得して返す
-func (s *BillingService) GetCurrentPaymentMethod(ctx context.Context, clerkUserID string) (*PaymentMethodDTO, error) {
+func (s *BillingService) GetListPaymentMethods(ctx context.Context, clerkUserID string) ([]PaymentMethodItem, error) {
 	user, err := s.userRepo.GetByClerkUserID(ctx, clerkUserID)
 	if err != nil {
 		return nil, err
 	}
-	if user == nil {
-		return nil, nil
+	if user.StripeCustomerID == nil || *user.StripeCustomerID == "" {
+		return []PaymentMethodItem{}, nil
 	}
 
-	var paymentMethodID string
+	customerID := *user.StripeCustomerID
 
-	sub, err := s.subscriptionRepo.FindByUserID(ctx, user.ID)
+	customer, err := s.stripeClient.GetCustomer(ctx, customerID)
 	if err != nil {
 		return nil, err
 	}
 
-	if sub != nil && sub.StripeSubscriptionID != "" {
-		stripeSub, err := s.stripeClient.GetSubscription(ctx, sub.StripeSubscriptionID)
-		if err != nil {
-			return nil, err
-		}
-		log.Println("subscription default_payment_method:", stripeSub.DefaultPaymentMethod)
-	
-		if stripeSub.DefaultPaymentMethod != nil {
-			paymentMethodID = stripeSub.DefaultPaymentMethod.ID
-		}
-	}
-	
-	if paymentMethodID == "" && user.StripeCustomerID != nil && *user.StripeCustomerID != "" {
-		stripeCus, err := s.stripeClient.GetCustomer(ctx, *user.StripeCustomerID)
-		if err != nil {
-			return nil, err
-		}
-		log.Println("customer default_payment_method:", stripeCus.InvoiceSettings.DefaultPaymentMethod)
-	
-		if stripeCus.InvoiceSettings != nil && stripeCus.InvoiceSettings.DefaultPaymentMethod != nil {
-			paymentMethodID = stripeCus.InvoiceSettings.DefaultPaymentMethod.ID
-		}
-	}
-	
-	log.Println("resolved paymentMethodID:", paymentMethodID)
-
-
-	if paymentMethodID == "" {
-		return nil, nil
-	}
-
-	pm, err := s.stripeClient.GetPaymentMethod(ctx, paymentMethodID)
-
-	log.Println("pm type:", pm.Type)
-	log.Println("pm card:", pm.Card)
-	
+	methods, err := s.stripeClient.ListCustomerPaymentMethods(ctx, customerID)
 	if err != nil {
 		return nil, err
 	}
+
+	defaultPMID := ""
+	if customer.InvoiceSettings != nil && customer.InvoiceSettings.DefaultPaymentMethod != nil {
+		defaultPMID = customer.InvoiceSettings.DefaultPaymentMethod.ID
+	}
+
+	items := make([]PaymentMethodItem, 0, len(methods))
+	for _, pm := range methods {
+		item := mapPaymentMethodToItem(pm, pm.ID == defaultPMID)
+		if item != nil {
+			items = append(items, *item)
+		}
+	}
+
+	return items, nil
+}
+
+func mapPaymentMethodToItem(pm *stripe.PaymentMethod, isDefault bool) *PaymentMethodItem {
 	if pm == nil || pm.Card == nil {
-		return nil, nil
+		return nil
 	}
 
-	return &PaymentMethodDTO{
-		ID:       pm.ID,
-		Brand:    string(pm.Card.Brand),
-		Last4:    pm.Card.Last4,
-		ExpMonth: pm.Card.ExpMonth,
-		ExpYear:  pm.Card.ExpYear,
-	}, nil
+	item := &PaymentMethodItem{
+		ID:        pm.ID,
+		Brand:     string(pm.Card.Brand),
+		Last4:     pm.Card.Last4,
+		ExpMonth:  pm.Card.ExpMonth,
+		ExpYear:   pm.Card.ExpYear,
+		IsDefault: isDefault,
+	}
+
+	if pm.BillingDetails != nil {
+		item.BillingDetails.Name = pm.BillingDetails.Name
+		item.BillingDetails.Email = pm.BillingDetails.Email
+		item.BillingDetails.Phone = pm.BillingDetails.Phone
+
+		if pm.BillingDetails.Address != nil {
+			item.BillingDetails.Address = BillingAddress{
+				Country:    pm.BillingDetails.Address.Country,
+				PostalCode: pm.BillingDetails.Address.PostalCode,
+				State:      pm.BillingDetails.Address.State,
+				City:       pm.BillingDetails.Address.City,
+				Line1:      pm.BillingDetails.Address.Line1,
+				Line2:      pm.BillingDetails.Address.Line2,
+			}
+		}
+	}
+
+	return item
 }

@@ -66,7 +66,7 @@ func toString(v interface{}) string {
 	return s
 }
 
-func (h *BillingHandler) GetPaymentMethod(c *gin.Context) {
+func (h *BillingHandler) GetPaymentMethods(c *gin.Context) {
 	clerkUserIDValue, exists := c.Get("clerk_user_id")
 	if !exists {
 		c.JSON(http.StatusUnauthorized, gin.H{"error": "unauthorized"})
@@ -79,18 +79,16 @@ func (h *BillingHandler) GetPaymentMethod(c *gin.Context) {
 		return
 	}
 
-	pm, err := h.billingService.GetCurrentPaymentMethod(c.Request.Context(), clerkUserID)
+	pms, err := h.billingService.GetListPaymentMethods(c.Request.Context(), clerkUserID)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to get payment method"})
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to get payment methods"})
 		return
 	}
-
-
 
 	c.JSON(http.StatusOK, gin.H{
 		"status": "success",
 		"data": gin.H{
-			"payment_method": pm,
+			"payment_methods": pms,
 		},
 	})
 }

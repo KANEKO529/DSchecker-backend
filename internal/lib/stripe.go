@@ -105,3 +105,22 @@ func (c *StripeClient) GetPaymentMethod(ctx context.Context, paymentMethodID str
 
 	return stripePaymentMethod.Get(paymentMethodID, params)
 }
+
+func (c *StripeClient) ListCustomerPaymentMethods(ctx context.Context, stripeCustomerID string) ([]*stripe.PaymentMethod, error) {
+	params := &stripe.PaymentMethodListParams{
+		Customer: stripe.String(stripeCustomerID),
+		Type:     stripe.String("card"),
+	}
+	params.Context = ctx
+
+	iter := stripePaymentMethod.List(params)
+
+	var methods []*stripe.PaymentMethod
+	for iter.Next() {
+		methods = append(methods, iter.PaymentMethod())
+	}
+	if err := iter.Err(); err != nil {
+		return nil, err
+	}
+	return methods, nil
+}
