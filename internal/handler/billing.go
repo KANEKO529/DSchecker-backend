@@ -92,3 +92,27 @@ func (h *BillingHandler) GetPaymentMethods(c *gin.Context) {
 		},
 	})
 }
+
+func (h *BillingHandler) GetListInvoices(c *gin.Context) {
+	clerkUserIDValue, exists := c.Get("clerk_user_id")
+	if !exists {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "user not found in context"})
+		return
+	}
+
+	clerkUserID, ok := clerkUserIDValue.(string)
+	if !ok {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "invalid user id"})
+		return
+	}
+
+	invoices, err := h.billingService.ListInvoices(c.Request.Context(), clerkUserID)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to fetch invoices"})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"invoices": invoices,
+	})
+}

@@ -12,6 +12,7 @@ import (
 	stripeSub "github.com/stripe/stripe-go/v84/subscription"
 	stripeCustomer "github.com/stripe/stripe-go/v84/customer"
 	stripePaymentMethod "github.com/stripe/stripe-go/v84/paymentmethod"
+	stripeInvoice "github.com/stripe/stripe-go/v84/invoice"
 )
 
 // type StripeSubscriptionClient interface {
@@ -123,4 +124,29 @@ func (c *StripeClient) ListCustomerPaymentMethods(ctx context.Context, stripeCus
 		return nil, err
 	}
 	return methods, nil
+}
+
+func (c *StripeClient) ListInvoicesByCustomer(
+	ctx context.Context,
+	stripeCustomerID string,
+	limit int64,
+) ([]*stripe.Invoice, error) {
+	params := &stripe.InvoiceListParams{
+		Customer: stripe.String(stripeCustomerID),
+	}
+	params.Context = ctx
+	params.Limit = stripe.Int64(limit)
+
+	iter := stripeInvoice.List(params)
+
+	var invoices []*stripe.Invoice
+	for iter.Next() {
+		invoices = append(invoices, iter.Invoice())
+	}
+
+	if err := iter.Err(); err != nil {
+		return nil, err
+	}
+
+	return invoices, nil
 }

@@ -7,6 +7,7 @@ import (
 	"context"
 	"errors"
 	"log"
+	"time"
 
 	"dscheckerapp/internal/lib"
 	"dscheckerapp/internal/model"
@@ -17,6 +18,8 @@ import (
 )
 
 var ErrAlreadySubscribed = errors.New("already subscribed")
+var ErrStripeCustomerNotFound = errors.New("stripe customer not found")
+
 
 type BillingUserRepository interface {
 	GetByClerkUserID(ctx context.Context, clerkUserID string) (*model.User, error)
@@ -34,6 +37,7 @@ type BillingService struct {
 	subscriptionRepo BillingSubscriptionRepository
 }
 
+// 支払い方法取得用DTO
 type PaymentMethodItem struct {
 	ID        string `json:"id"`
 	Brand     string `json:"brand"`
@@ -44,6 +48,21 @@ type PaymentMethodItem struct {
 
 	BillingDetails BillingDetails `json:"billingDetails"`
 }
+
+// invoice一覧用DTO
+type InvoiceListItem struct {
+	InvoiceID        string    `json:"invoiceId"`
+	InvoiceNumber    string    `json:"invoiceNumber"`
+	BilledAt         time.Time `json:"billedAt"`
+	AmountPaid       int64     `json:"amountPaid"`
+	Currency         string    `json:"currency"`
+	Status           string    `json:"status"`
+	StatusLabel      string    `json:"statusLabel"`
+	SubscriptionName string    `json:"subscriptionName"`
+	HostedInvoiceURL string    `json:"hostedInvoiceUrl"`
+	InvoicePDF       string    `json:"invoicePdf"`
+}
+
 
 type BillingDetails struct {
 	Name    string         `json:"name"`
@@ -60,6 +79,7 @@ type BillingAddress struct {
 	Line1      string `json:"line1"`
 	Line2      string `json:"line2"`
 }
+
 
 func NewBillingService(
 	stripeConfig *lib.StripeConfig,
@@ -238,4 +258,68 @@ func mapPaymentMethodToItem(pm *stripe.PaymentMethod, isDefault bool) *PaymentMe
 	}
 
 	return item
+}
+
+func (s *BillingService) ListInvoices(ctx context.Context, clerkUserID string) ([]InvoiceListItem, error) {
+	user, err := s.userRepo.GetByClerkUserID(ctx, clerkUserID)
+	if err != nil {
+		return nil, err
+	}
+	if user.StripeCustomerID == nil || *user.StripeCustomerID == "" {
+		return []InvoiceListItem{}, nil
+	}
+
+	// ここで取得
+	invoices, err := s.stripeClient.ListInvoicesByCustomer(ctx, *user.StripeCustomerID, 20)
+	if err != nil {
+		return nil, err
+	}
+
+	items := make([]InvoiceListItem, 0, len(invoices))
+	for _, inv := range invoices {
+		billedAt := time.Unix(inv.Created, 0)
+
+		items = append(items, InvoiceListItem{
+			InvoiceID:        inv.ID,
+			InvoiceNumber:    inv.Number,
+			BilledAt:         billedAt,
+			AmountPaid:       inv.AmountPaid,
+			Currency:         string(inv.Currency),
+			Status:           string(inv.Status),
+			StatusLabel:      invoiceStatusLabel(inv.Status),
+			SubscriptionName: extractSubscriptionName(inv),
+			HostedInvoiceURL: inv.HostedInvoiceURL,
+			InvoicePDF:       inv.InvoicePDF,
+		})
+	}
+
+	return items, nil
+}
+
+func invoiceStatusLabel(status stripe.InvoiceStatus) string {
+	switch status {
+	case stripe.InvoiceStatusPaid:
+		return "支払い済み"
+	case stripe.InvoiceStatusOpen:
+		return "未払い"
+	case stripe.InvoiceStatusDraft:
+		return "下書き"
+	case stripe.InvoiceStatusVoid:
+		return "無効"
+	case stripe.InvoiceStatusUncollectible:
+		return "回収不能"
+	default:
+		return "不明"
+	}
+}
+
+func extractSubscriptionName(inv *stripe.Invoice) string {
+	if inv.Lines != nil {
+		for _, line := range inv.Lines.Data {
+			if line.Description != "" {
+				return line.Description
+			}
+		}
+	}
+	return "Proプラン"
 }
