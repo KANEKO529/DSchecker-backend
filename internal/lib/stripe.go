@@ -13,6 +13,7 @@ import (
 	stripeCustomer "github.com/stripe/stripe-go/v84/customer"
 	stripePaymentMethod "github.com/stripe/stripe-go/v84/paymentmethod"
 	stripeInvoice "github.com/stripe/stripe-go/v84/invoice"
+	billingportalSession "github.com/stripe/stripe-go/v84/billingportal/session"
 )
 
 // type StripeSubscriptionClient interface {
@@ -149,4 +150,23 @@ func (c *StripeClient) ListInvoicesByCustomer(
 	}
 
 	return invoices, nil
+}
+
+func (c *StripeClient) CreateCustomerPortalSession(
+	ctx context.Context,
+	stripeCustomerID string,
+	returnURL string,
+) (string, error) {
+	params := &stripe.BillingPortalSessionParams{
+		Customer: stripe.String(stripeCustomerID),
+		ReturnURL: stripe.String(returnURL),
+	}
+	params.Context = ctx
+
+	session, err := billingportalSession.New(params)
+	if err != nil {
+		return "", err
+	}
+
+	return session.URL, nil
 }

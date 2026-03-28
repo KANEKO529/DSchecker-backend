@@ -116,3 +116,32 @@ func (h *BillingHandler) GetListInvoices(c *gin.Context) {
 		"invoices": invoices,
 	})
 }
+
+func (h *BillingHandler) CreateCustomerPortal(c *gin.Context) {
+	clerkUserIDValue, exists := c.Get("clerk_user_id")
+	if !exists {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "user not found in context"})
+		return
+	}
+
+	clerkUserID, ok := clerkUserIDValue.(string)
+	if !ok {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "invalid user id"})
+		return
+	}
+
+	url, err := h.billingService.CreateCustomerPortalSession(c.Request.Context(), clerkUserID)
+	if err != nil {
+		if errors.Is(err, service.ErrStripeCustomerNotFound) {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "stripe customer not found"})
+			return
+		}
+
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to create customer portal session"})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"url": url,
+	})
+}

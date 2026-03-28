@@ -30,6 +30,10 @@ type BillingSubscriptionRepository interface {
 	FindByUserID(ctx context.Context, userID int64) (*model.Subscription, error)
 }
 
+type StripeClient interface {
+	CreateCustomerPortalSession(ctx context.Context, stripeCustomerID string, returnURL string) (string, error)
+}
+
 type BillingService struct {
 	stripeConfig     *lib.StripeConfig
 	stripeClient     *lib.StripeClient
@@ -182,6 +186,28 @@ func (s *BillingService) CreateCheckoutSession(ctx context.Context, customerEmai
 	)
 
 	return session.URL, nil
+}
+
+func (s *BillingService) CreateCustomerPortalSession(ctx context.Context, clerkUserID string) (string, error) {
+	// user 取得
+	user, err := s.userRepo.GetByClerkUserID(ctx, clerkUserID)
+	if err != nil {
+		log.Printf("[CHECKOUT ERROR] failed to find user by clerk_user_id=%s: %v", clerkUserID, err)
+		return "", err
+	}
+
+	returnURL := s.stripeConfig.AppURL + "/mypage"
+
+	url, err := s.stripeClient.CreateCustomerPortalSession(
+		ctx,
+		*user.StripeCustomerID,
+		returnURL,
+	)
+	if err != nil {
+		return "", err
+	}
+
+	return url, nil
 }
 
 // clerkUserID で user を取得
