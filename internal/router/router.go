@@ -88,8 +88,9 @@ func SetupRouter(db *pgxpool.Pool, stripeCfg *lib.StripeConfig) *gin.Engine {
 			protected.POST("/me/subscription/resume", subscriptionHandler.ResumeMySubscription)
 
 			protected.POST("/billing/checkout-session", billingHandler.CreateCheckoutSession)
-			protected.GET("/billing/payment-methods", billingHandler.GetPaymentMethods)
-			protected.GET("/billing/invoices", billingHandler.GetListInvoices)
+			protected.GET("/billing/summary", billingHandler.GetBillingSummary)
+			// protected.GET("/billing/payment-methods", billingHandler.GetPaymentMethods)
+			// protected.GET("/billing/invoices", billingHandler.GetListInvoices)
 			protected.POST("/billing/customer-portal", billingHandler.CreateCustomerPortal)
 		}
 	}

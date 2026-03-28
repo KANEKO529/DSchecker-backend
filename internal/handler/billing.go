@@ -8,14 +8,21 @@ import (
 	"errors"
 	"log"
 	"net/http"
+	"sync"
 
 	"github.com/gin-gonic/gin"
 
 	"dscheckerapp/internal/service"
 )
 
+
 type BillingHandler struct {
 	billingService *service.BillingService
+}
+
+type BillingSummaryResponse struct {
+	PaymentMethods []service.PaymentMethodItem `json:"payment_methods"`
+	Invoices       []service.InvoiceListItem   `json:"invoices"`
 }
 
 func NewBillingHandler(billingService *service.BillingService) *BillingHandler {
@@ -66,7 +73,7 @@ func toString(v interface{}) string {
 	return s
 }
 
-func (h *BillingHandler) GetPaymentMethods(c *gin.Context) {
+func (h *BillingHandler) GetBillingSummary(c *gin.Context) {
 	clerkUserIDValue, exists := c.Get("clerk_user_id")
 	if !exists {
 		c.JSON(http.StatusUnauthorized, gin.H{"error": "unauthorized"})
@@ -79,43 +86,101 @@ func (h *BillingHandler) GetPaymentMethods(c *gin.Context) {
 		return
 	}
 
-	pms, err := h.billingService.GetListPaymentMethods(c.Request.Context(), clerkUserID)
-	if err != nil {
+	ctx := c.Request.Context()
+
+	var (
+		wg       sync.WaitGroup
+		pms      []service.PaymentMethodItem
+		invoices []service.InvoiceListItem
+		err1     error
+		err2     error
+	)
+
+	wg.Add(2)
+
+	go func() {
+		defer wg.Done()
+		pms, err1 = h.billingService.GetListPaymentMethods(ctx, clerkUserID)
+	}()
+
+	go func() {
+		defer wg.Done()
+		invoices, err2 = h.billingService.ListInvoices(ctx, clerkUserID)
+	}()
+
+	wg.Wait()
+
+	if err1 != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to get payment methods"})
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{
-		"status": "success",
-		"data": gin.H{
-			"payment_methods": pms,
-		},
-	})
-}
-
-func (h *BillingHandler) GetListInvoices(c *gin.Context) {
-	clerkUserIDValue, exists := c.Get("clerk_user_id")
-	if !exists {
-		c.JSON(http.StatusUnauthorized, gin.H{"error": "user not found in context"})
-		return
-	}
-
-	clerkUserID, ok := clerkUserIDValue.(string)
-	if !ok {
-		c.JSON(http.StatusUnauthorized, gin.H{"error": "invalid user id"})
-		return
-	}
-
-	invoices, err := h.billingService.ListInvoices(c.Request.Context(), clerkUserID)
-	if err != nil {
+	if err2 != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to fetch invoices"})
 		return
 	}
 
 	c.JSON(http.StatusOK, gin.H{
-		"invoices": invoices,
+		"status": "success",
+		"data": BillingSummaryResponse{
+			PaymentMethods: pms,
+			Invoices:       invoices,
+		},
 	})
 }
+
+// 3/28 API統合のため廃止
+// func (h *BillingHandler) GetPaymentMethods(c *gin.Context) {
+// 	clerkUserIDValue, exists := c.Get("clerk_user_id")
+// 	if !exists {
+// 		c.JSON(http.StatusUnauthorized, gin.H{"error": "unauthorized"})
+// 		return
+// 	}
+
+// 	clerkUserID, ok := clerkUserIDValue.(string)
+// 	if !ok || clerkUserID == "" {
+// 		c.JSON(http.StatusUnauthorized, gin.H{"error": "invalid clerk user id"})
+// 		return
+// 	}
+
+// 	pms, err := h.billingService.GetListPaymentMethods(c.Request.Context(), clerkUserID)
+// 	if err != nil {
+// 		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to get payment methods"})
+// 		return
+// 	}
+
+// 	c.JSON(http.StatusOK, gin.H{
+// 		"status": "success",
+// 		"data": gin.H{
+// 			"payment_methods": pms,
+// 		},
+// 	})
+// }
+
+// 3/28 API統合のため廃止
+// func (h *BillingHandler) GetListInvoices(c *gin.Context) {
+// 	clerkUserIDValue, exists := c.Get("clerk_user_id")
+// 	if !exists {
+// 		c.JSON(http.StatusUnauthorized, gin.H{"error": "user not found in context"})
+// 		return
+// 	}
+
+// 	clerkUserID, ok := clerkUserIDValue.(string)
+// 	if !ok {
+// 		c.JSON(http.StatusUnauthorized, gin.H{"error": "invalid user id"})
+// 		return
+// 	}
+
+// 	invoices, err := h.billingService.ListInvoices(c.Request.Context(), clerkUserID)
+// 	if err != nil {
+// 		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to fetch invoices"})
+// 		return
+// 	}
+
+// 	c.JSON(http.StatusOK, gin.H{
+// 		"invoices": invoices,
+// 	})
+// }
 
 func (h *BillingHandler) CreateCustomerPortal(c *gin.Context) {
 	clerkUserIDValue, exists := c.Get("clerk_user_id")

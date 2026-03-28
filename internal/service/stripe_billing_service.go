@@ -41,6 +41,7 @@ type BillingService struct {
 	subscriptionRepo BillingSubscriptionRepository
 }
 
+
 // 支払い方法取得用DTO
 type PaymentMethodItem struct {
 	ID        string `json:"id"`
