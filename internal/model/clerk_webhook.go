@@ -9,10 +9,11 @@ type ClerkWebhookEvent struct {
 }
 
 type ClerkUserPayload struct {
-	ID                    string `json:"id"`
-	FirstName             string `json:"first_name"`
-	LastName              string `json:"last_name"`
-	PrimaryEmailAddressID string `json:"primary_email_address_id"`
+	ID                    string              `json:"id"`
+	Username              string              `json:"username"`
+	FirstName             string              `json:"first_name"`
+	LastName              string              `json:"last_name"`
+	PrimaryEmailAddressID string              `json:"primary_email_address_id"`
 	EmailAddresses        []ClerkEmailAddress `json:"email_addresses"`
 }
 

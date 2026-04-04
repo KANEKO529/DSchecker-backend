@@ -4,7 +4,7 @@ import (
 	"log"
 
 	"dscheckerapp/internal/config"
-	"dscheckerapp/internal/db"	
+	"dscheckerapp/internal/db"
 	"dscheckerapp/internal/lib"
 	"dscheckerapp/internal/router"
 )
@@ -17,6 +17,11 @@ func main() {
 		log.Fatalf("failed to load stripe config: %v", err)
 	}
 
+	clerkCfg, err := lib.LoadClerkConfig()
+	if err != nil {
+		log.Fatalf("failed to load clerk config: %v", err)
+	}
+
 	lib.InitStripe(stripeCfg)
 
 	database, err := db.New(cfg.DatabaseURL)
@@ -25,7 +30,7 @@ func main() {
 	}
 	defer database.Close()
 
-	r := router.SetupRouter(database, stripeCfg)
+	r := router.SetupRouter(database, stripeCfg, clerkCfg)
 
 	log.Println("server started on :" + cfg.Port)
 

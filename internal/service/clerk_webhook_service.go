@@ -19,7 +19,7 @@ func NewClerkWebhookService(userRepo *repository.UserRepository) *ClerkWebhookSe
 }
 
 func (s *ClerkWebhookService) HandleUserCreated(ctx context.Context, payload model.ClerkUserPayload) error {
-	name := extractFullName(payload)
+	name := extractUserName(payload)
 
 	user := model.User{
 		ClerkUserID: payload.ID,
@@ -31,13 +31,12 @@ func (s *ClerkWebhookService) HandleUserCreated(ctx context.Context, payload mod
 }
 
 func (s *ClerkWebhookService) HandleUserUpdated(ctx context.Context, payload model.ClerkUserPayload) error {
-	name := extractFullName(payload)
+	name := extractUserName(payload)
 
 	user := model.User{
 		ClerkUserID: payload.ID,
 		Email:       extractPrimaryEmail(payload),
 		UserName:    &name,
-		Role:        "user",
 	}
 	return s.UserRepo.UpsertUser(ctx, user)
 }
@@ -58,19 +57,19 @@ func extractPrimaryEmail(u model.ClerkUserPayload) string {
 	return "user_" + u.ID + "@example.com"
 }
 
-func extractFullName(u model.ClerkUserPayload) string {
+// helper function
+func extractUserName(u model.ClerkUserPayload) string {
+	if strings.TrimSpace(u.Username) != "" {
+		return strings.TrimSpace(u.Username)
+	}
+
 	full := strings.TrimSpace(u.FirstName + " " + u.LastName)
 	if full != "" {
 		return full
 	}
-	if u.FirstName != "" {
-		return u.FirstName
-	}
-	if u.LastName != "" {
-		return u.LastName
-	}
+
 	if len(u.ID) >= 8 {
-		return "User " + u.ID[:8]
+		return "User_" + u.ID[:8]
 	}
-	return "User " + u.ID
+	return "User_" + u.ID
 }

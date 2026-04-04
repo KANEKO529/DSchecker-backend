@@ -4,22 +4,17 @@
 package lib
 
 import (
+	"context"
 	"fmt"
 	"os"
-	"context"
 
 	"github.com/stripe/stripe-go/v84"
-	stripeSub "github.com/stripe/stripe-go/v84/subscription"
-	stripeCustomer "github.com/stripe/stripe-go/v84/customer"
-	stripePaymentMethod "github.com/stripe/stripe-go/v84/paymentmethod"
-	stripeInvoice "github.com/stripe/stripe-go/v84/invoice"
 	billingportalSession "github.com/stripe/stripe-go/v84/billingportal/session"
+	stripeCustomer "github.com/stripe/stripe-go/v84/customer"
+	stripeInvoice "github.com/stripe/stripe-go/v84/invoice"
+	stripePaymentMethod "github.com/stripe/stripe-go/v84/paymentmethod"
+	stripeSub "github.com/stripe/stripe-go/v84/subscription"
 )
-
-// type StripeSubscriptionClient interface {
-// 	CancelAtPeriodEnd(ctx context.Context, stripeSubscriptionID string) error
-// 	ResumeSubscription(ctx context.Context, stripeSubscriptionID string) error
-// }
 
 type StripeConfig struct {
 	SecretKey     string
@@ -29,13 +24,11 @@ type StripeConfig struct {
 }
 
 type StripeClient struct {
-
 }
 
 func NewStripeClient() *StripeClient {
 	return &StripeClient{}
 }
-
 
 func LoadStripeConfig() (*StripeConfig, error) {
 	cfg := &StripeConfig{
@@ -158,7 +151,7 @@ func (c *StripeClient) CreateCustomerPortalSession(
 	returnURL string,
 ) (string, error) {
 	params := &stripe.BillingPortalSessionParams{
-		Customer: stripe.String(stripeCustomerID),
+		Customer:  stripe.String(stripeCustomerID),
 		ReturnURL: stripe.String(returnURL),
 	}
 	params.Context = ctx

@@ -18,7 +18,7 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
-func SetupRouter(db *pgxpool.Pool, stripeCfg *lib.StripeConfig) *gin.Engine {
+func SetupRouter(db *pgxpool.Pool, stripeCfg *lib.StripeConfig, clerkCfg *lib.ClerkConfig) *gin.Engine {
 	r := gin.Default()
 
 	frontendOrigin := os.Getenv("CORS_ORIGIN")
@@ -39,13 +39,14 @@ func SetupRouter(db *pgxpool.Pool, stripeCfg *lib.StripeConfig) *gin.Engine {
 
 	// lib
 	stripeClient := lib.NewStripeClient()
-
+	clerkClient := lib.NewClerkClient(clerkCfg)
 
 	// repository
 	userRepo := repository.NewUserRepository(db)
 	subscriptionRepo := repository.NewSubscriptionRepository(db)
 
 	// service
+	meService := service.NewMeService(clerkClient)
 	clerkWebhookService := service.NewClerkWebhookService(userRepo)
 	stripeWebhookService := service.NewStripeWebhookService(subscriptionRepo)
 	billingService := service.NewBillingService(stripeCfg, stripeClient, userRepo, subscriptionRepo)
@@ -57,6 +58,7 @@ func SetupRouter(db *pgxpool.Pool, stripeCfg *lib.StripeConfig) *gin.Engine {
 
 	// handler
 	userHandler := handler.NewUserHandler(userRepo)
+	meHandler := handler.NewMeHandler(meService)
 	clerkWebhookHandler := handler.NewClerkWebhookHandler(clerkWebhookService)
 	stripeWebhookHandler := handler.NewStripeWebhookHandler(
 		stripeWebhookService,
@@ -82,7 +84,9 @@ func SetupRouter(db *pgxpool.Pool, stripeCfg *lib.StripeConfig) *gin.Engine {
 		protected.Use(authMiddleware.RequireAuth())
 		{
 			protected.GET("/me", userHandler.Me)
-			
+
+			protected.PATCH("/me/profile", meHandler.UpdateMyProfile)
+
 			protected.GET("/me/subscription", subscriptionHandler.GetMySubscription)
 			protected.POST("/me/subscription/cancel", subscriptionHandler.CancelMySubscription)
 			protected.POST("/me/subscription/resume", subscriptionHandler.ResumeMySubscription)
