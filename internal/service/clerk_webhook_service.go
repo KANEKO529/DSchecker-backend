@@ -21,7 +21,7 @@ func NewClerkWebhookService(userRepo *repository.UserRepository) *ClerkWebhookSe
 
 // 新規追加時
 func (s *ClerkWebhookService) HandleUserCreated(ctx context.Context, payload model.ClerkUserPayload) error {
-	name := extractUserName(payload)
+	name := extractDisplayName(payload)
 
 	user := model.User{
 		ClerkUserID: payload.ID,
@@ -46,14 +46,13 @@ func (s *ClerkWebhookService) HandleUserCreated(ctx context.Context, payload mod
 
 // 更新時
 func (s *ClerkWebhookService) HandleUserUpdated(ctx context.Context, payload model.ClerkUserPayload) error {
-	name := extractUserName(payload)
-
-	user := model.User{
-		ClerkUserID: payload.ID,
-		Email:       extractPrimaryEmail(payload),
-		UserName:    &name,
-	}
-	return s.UserRepo.UpdateUserByClerkID(ctx, user)
+	name := extractDisplayName(payload)
+	return s.UserRepo.UpdateProfileByClerkID(
+		ctx,
+		payload.ID,
+		extractPrimaryEmail(payload),
+		&name,
+	)
 }
 
 func (s *ClerkWebhookService) HandleUserDeleted(ctx context.Context, clerkUserID string) error {
@@ -73,18 +72,28 @@ func extractPrimaryEmail(u model.ClerkUserPayload) string {
 }
 
 // helper function
-func extractUserName(u model.ClerkUserPayload) string {
-	if strings.TrimSpace(u.Username) != "" {
-		return strings.TrimSpace(u.Username)
-	}
+func extractDisplayName(payload model.ClerkUserPayload) string {
+	first := strings.TrimSpace(payload.FirstName)
+	last := strings.TrimSpace(payload.LastName)
 
-	full := strings.TrimSpace(u.FirstName + " " + u.LastName)
+	full := strings.TrimSpace(last + first)
 	if full != "" {
 		return full
 	}
-
-	if len(u.ID) >= 8 {
-		return "User_" + u.ID[:8]
+	if first != "" {
+		return first
 	}
-	return "User_" + u.ID
+	if last != "" {
+		return last
+	}
+
+	email := extractPrimaryEmail(payload)
+	if email != "" {
+		parts := strings.Split(email, "@")
+		if len(parts) > 0 && parts[0] != "" {
+			return parts[0]
+		}
+	}
+
+	return "user"
 }

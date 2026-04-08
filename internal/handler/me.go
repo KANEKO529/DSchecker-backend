@@ -73,17 +73,66 @@ func (h *MeHandler) Me(c *gin.Context) {
 	})
 }
 
+// func (h *MeHandler) UpdateMyProfile(c *gin.Context) {
+// 	var req dto.UpdateMyProfileRequest
+
+// 	// ここでリクエストボディを取得
+// 	if err := c.ShouldBindJSON(&req); err != nil {
+// 		c.JSON(http.StatusBadRequest, gin.H{
+// 			"status":  "error",
+// 			"message": "invalid request",
+// 		})
+// 		return
+// 	}
+
+// 	clerkUserIDValue, exists := c.Get("clerk_user_id")
+// 	if !exists {
+// 		c.JSON(http.StatusUnauthorized, gin.H{
+// 			"status":  "error",
+// 			"message": "unauthorized",
+// 		})
+// 		return
+// 	}
+
+// 	clerkUserID, ok := clerkUserIDValue.(string)
+// 	if !ok || clerkUserID == "" {
+// 		c.JSON(http.StatusUnauthorized, gin.H{
+// 			"status":  "error",
+// 			"message": "unauthorized",
+// 		})
+// 		return
+// 	}
+
+// 	// servise呼び出し
+// 	if err := h.meService.UpdateMyProfile(c.Request.Context(), clerkUserID, req); err != nil {
+// 		c.JSON(http.StatusInternalServerError, gin.H{
+// 			"status":  "error",
+// 			"message": err.Error(),
+// 		})
+// 		return
+// 	}
+
+// 	c.JSON(http.StatusOK, gin.H{
+// 		"status":  "success",
+// 		"message": "profile updated",
+// 	})
+// }
+
 func (h *MeHandler) UpdateMyProfile(c *gin.Context) {
 	var req dto.UpdateMyProfileRequest
 
-	// ここでリクエストボディを取得
 	if err := c.ShouldBindJSON(&req); err != nil {
+		log.Printf("[UpdateMyProfile] bind error: %v", err)
 		c.JSON(http.StatusBadRequest, gin.H{
 			"status":  "error",
 			"message": "invalid request",
 		})
 		return
 	}
+
+	log.Printf("req ", req)
+
+	log.Printf("[UpdateMyProfile] req firstName=%q lastName=%q", req.FirstName, req.LastName)
 
 	clerkUserIDValue, exists := c.Get("clerk_user_id")
 	if !exists {
@@ -103,9 +152,8 @@ func (h *MeHandler) UpdateMyProfile(c *gin.Context) {
 		return
 	}
 
-	// servise呼び出し
 	if err := h.meService.UpdateMyProfile(c.Request.Context(), clerkUserID, req); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{
+		c.JSON(http.StatusBadRequest, gin.H{
 			"status":  "error",
 			"message": err.Error(),
 		})

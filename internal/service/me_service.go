@@ -16,9 +16,10 @@ type MeService struct {
 	userRepo    UserQueryRepository
 }
 
-type UpdateMyProfileRequest struct {
-	Username string `json:"username" binding:"required,min=3,max=50"`
-}
+// type UpdateMyProfileRequest struct {
+// 	FirstName string `json:"firstName"`
+// 	LastName  string `json:"lastName"`
+// }
 
 func NewMeService(clerkClient *lib.ClerkClient, userRepo UserQueryRepository) *MeService {
 	return &MeService{
@@ -32,10 +33,15 @@ func (s *MeService) GetMe(ctx context.Context, clerkUserID string) (*model.User,
 }
 
 func (s *MeService) UpdateMyProfile(ctx context.Context, clerkUserID string, req dto.UpdateMyProfileRequest) error {
-	username := strings.TrimSpace(req.Username)
-	if username == "" {
-		return errors.New("username is required")
+	firstName := strings.TrimSpace(req.FirstName)
+	lastName := strings.TrimSpace(req.LastName)
+
+	if firstName == "" {
+		return errors.New("firstName is required")
+	}
+	if lastName == "" {
+		return errors.New("lastName is required")
 	}
 
-	return s.clerkClient.UpdateUsername(ctx, clerkUserID, username)
+	return s.clerkClient.UpdateName(ctx, clerkUserID, firstName, lastName)
 }

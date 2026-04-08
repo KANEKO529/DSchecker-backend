@@ -21,6 +21,7 @@ func NewUserRepository(db *pgxpool.Pool) *UserRepository {
 	return &UserRepository{db: db}
 }
 
+// stripe_customer_id を users テーブルに保存（更新）
 func (r *UserRepository) UpdateStripeCustomerID(ctx context.Context, userID int64, stripeCustomerID string) error {
 	// DBの実行結果は ct に入っている
 	ct, err := r.db.Exec(ctx, `
@@ -127,28 +128,41 @@ func (r *UserRepository) GetUsers(ctx context.Context) ([]model.User, error) {
 // user.created の初回同期
 // user.updated の同期
 // 何らかの理由で同じ Clerk ユーザーを再同期したいとき
-func (r *UserRepository) UpdateUserByClerkID(ctx context.Context, user model.User) error {
+// func (r *UserRepository) UpdateUserByClerkID(ctx context.Context, user model.User) error {
+// 	query := `
+// 		INSERT INTO public.users (
+// 			clerk_user_id, email, user_name, role, status, created_at, updated_at, deleted_at
+// 		)
+// 		VALUES ($1, $2, $3, $4, $5, NOW(), NOW(), NULL)
+// 		ON CONFLICT (clerk_user_id)
+// 		DO UPDATE SET
+// 			email = EXCLUDED.email,
+// 			user_name = EXCLUDED.user_name,
+// 			role = EXCLUDED.role,
+// 			status = EXCLUDED.status,
+// 			deleted_at = NULL,
+// 			updated_at = NOW()
+// 	`
+// 	_, err := r.db.Exec(ctx, query,
+// 		user.ClerkUserID,
+// 		user.Email,
+// 		user.UserName,
+// 		user.Role,
+// 		user.Status,
+// 	)
+// 	return err
+// }
+
+func (r *UserRepository) UpdateProfileByClerkID(ctx context.Context, clerkUserID, email string, userName *string) error {
 	query := `
-		INSERT INTO public.users (
-			clerk_user_id, email, user_name, role, status, created_at, updated_at, deleted_at
-		)
-		VALUES ($1, $2, $3, $4, $5, NOW(), NOW(), NULL)
-		ON CONFLICT (clerk_user_id)
-		DO UPDATE SET
-			email = EXCLUDED.email,
-			user_name = EXCLUDED.user_name,
-			role = EXCLUDED.role,
-			status = EXCLUDED.status,
-			deleted_at = NULL,
+		UPDATE public.users
+		SET
+			email = $2,
+			user_name = $3,
 			updated_at = NOW()
+		WHERE clerk_user_id = $1
 	`
-	_, err := r.db.Exec(ctx, query,
-		user.ClerkUserID,
-		user.Email,
-		user.UserName,
-		user.Role,
-		user.Status,
-	)
+	_, err := r.db.Exec(ctx, query, clerkUserID, email, userName)
 	return err
 }
 

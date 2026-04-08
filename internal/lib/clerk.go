@@ -44,9 +44,10 @@ func LoadClerkConfig() (*ClerkConfig, error) {
 	return cfg, nil
 }
 
-func (c *ClerkClient) UpdateUsername(ctx context.Context, clerkUserID, username string) error {
+func (c *ClerkClient) UpdateName(ctx context.Context, clerkUserID, firstName, lastName string) error {
 	params := &user.UpdateParams{
-		Username: clerk.String(username),
+		FirstName: clerk.String(firstName),
+		LastName:  clerk.String(lastName),
 	}
 
 	_, err := c.userClient.Update(ctx, clerkUserID, params)
