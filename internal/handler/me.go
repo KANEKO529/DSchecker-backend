@@ -14,18 +14,19 @@ import (
 )
 
 type MeHandler struct {
-	meService *service.MeService
+	meService      *service.MeService
+	accountService *service.AccountService
 }
 
 type UpdateMyProfileRequest struct {
 	Username string `json:"username" binding:"required,min=3,max=50"`
 }
 
-func NewMeHandler(meService *service.MeService) *MeHandler {
-	return &MeHandler{meService: meService}
+func NewMeHandler(meService *service.MeService, accountService *service.AccountService) *MeHandler {
+	return &MeHandler{meService: meService, accountService: accountService}
 }
 
-func (h *UserHandler) Me(c *gin.Context) {
+func (h *MeHandler) Me(c *gin.Context) {
 	clerkUserIDValue, exists := c.Get("clerk_user_id")
 	if !exists {
 		c.JSON(http.StatusUnauthorized, gin.H{
@@ -44,7 +45,8 @@ func (h *UserHandler) Me(c *gin.Context) {
 		return
 	}
 
-	user, err := h.UserRepo.GetByClerkUserID(c.Request.Context(), clerkUserID)
+	// user, err := h.UserRepo.GetByClerkUserID(c.Request.Context(), clerkUserID)
+	user, err := h.meService.GetMe(c.Request.Context(), clerkUserID)
 	if err != nil {
 		log.Printf("[ME] GetByClerkUserID error: %#v", err)
 
@@ -113,5 +115,37 @@ func (h *MeHandler) UpdateMyProfile(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{
 		"status":  "success",
 		"message": "profile updated",
+	})
+}
+
+func (h *MeHandler) DeleteMyAccount(c *gin.Context) {
+	clerkUserID := c.GetString("clerk_user_id")
+	if clerkUserID == "" {
+		c.JSON(http.StatusUnauthorized, gin.H{
+			"error": "unauthorized",
+		})
+		return
+	}
+
+	err := h.accountService.DeleteMyAccountByClerkUserID(
+		c.Request.Context(),
+		clerkUserID,
+	)
+	if err != nil {
+		switch {
+		case errors.Is(err, service.ErrSubscriptionPastDue):
+			c.JSON(http.StatusConflict, gin.H{
+				"error": "subscription past due",
+			})
+		default:
+			c.JSON(http.StatusInternalServerError, gin.H{
+				"error": "failed to delete account",
+			})
+		}
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"message": "account deleted",
 	})
 }

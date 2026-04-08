@@ -1,4 +1,5 @@
 // internal/handler/user.go
+// ユーザー一覧や他ユーザー管理寄りの操作だけ残す
 package handler
 
 import (

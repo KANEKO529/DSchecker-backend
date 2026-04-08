@@ -52,3 +52,9 @@ func (c *ClerkClient) UpdateUsername(ctx context.Context, clerkUserID, username 
 	_, err := c.userClient.Update(ctx, clerkUserID, params)
 	return err
 }
+
+// clerk SDKメソッド
+func (c *ClerkClient) DeleteUser(ctx context.Context, clerkUserID string) error {
+	_, err := c.userClient.Delete(ctx, clerkUserID)
+	return err
+}

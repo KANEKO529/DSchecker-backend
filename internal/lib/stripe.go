@@ -69,6 +69,17 @@ func (c *StripeClient) CancelAtPeriodEnd(ctx context.Context, stripeSubscription
 	return err
 }
 
+// 外部API通信
+// 即時キャンセル
+// 返金なし・日割りなし
+func (c *StripeClient) CancelImmediately(ctx context.Context, stripeSubscriptionID string) error {
+	params := &stripe.SubscriptionCancelParams{}
+	params.Context = ctx
+
+	_, err := stripeSub.Cancel(stripeSubscriptionID, params)
+	return err
+}
+
 // 解約取り消し
 func (c *StripeClient) ResumeSubscription(ctx context.Context, stripeSubscriptionID string) error {
 	params := &stripe.SubscriptionParams{

@@ -20,6 +20,7 @@ type UserQueryRepository interface {
 
 // stripe送信用
 type StripeSubscriptionClient interface {
+	CancelImmediately(ctx context.Context, stripeSubscriptionID string) error
 	CancelAtPeriodEnd(ctx context.Context, stripeSubscriptionID string) error
 	ResumeSubscription(ctx context.Context, stripeSubscriptionID string) error
 }
@@ -94,24 +95,28 @@ func isActiveSubscription(status string, endedAt *time.Time) bool {
 	}
 }
 
-
+// Serviceを認証に依存させないために分離
+// 外部（Handler）から呼ばれる用(入口)
+// ここは名前を変えない.
 func (s *SubscriptionService) CancelMySubscriptionByClerkUserID(
 	ctx context.Context,
 	clerkUserID string,
 ) error {
+	// clerk_id取得
 	user, err := s.userRepo.GetByClerkUserID(ctx, clerkUserID)
 	if err != nil {
 		return err
 	}
 
-	return s.CancelMySubscription(ctx, user.ID)
+	return s.CancelMySubscriptionAtPeriodEnd(ctx, user.ID)
 }
 
+// 純粋なビジネスロジック
 // ① 現在の契約を確認
 // ② 解約できるか判定
 // ③ Stripeに命令を送る
 // ④ 終わり（DB更新しない）
-func (s *SubscriptionService) CancelMySubscription(
+func (s *SubscriptionService) CancelMySubscriptionAtPeriodEnd(
 	ctx context.Context,
 	userID int64,
 ) error {
@@ -146,7 +151,53 @@ func (s *SubscriptionService) CancelMySubscription(
 		return nil
 	}
 
+	//ここでキャンセル処理：満了キャンセル
 	if err := s.stripeClient.CancelAtPeriodEnd(ctx, sub.StripeSubscriptionID); err != nil {
+		return err
+	}
+
+	return nil
+}
+
+// handlerから呼び出し 現在の実装では使用しない、
+// func (s *SubscriptionService) CancelMySubscriptionImmediatelyByClerkUserID(
+// 	ctx context.Context,
+// 	clerkUserID string,
+// ) error {
+// 	user, err := s.userRepo.GetByClerkUserID(ctx, clerkUserID)
+// 	if err != nil {
+// 		return err
+// 	}
+
+// 	return s.CancelMySubscriptionImmediately(ctx, user.ID)
+// }
+
+func (s *SubscriptionService) CancelMySubscriptionImmediately(
+	ctx context.Context,
+	userID int64,
+) error {
+	sub, err := s.subscriptionRepo.FindCurrentByUserID(ctx, userID)
+	if err != nil {
+		return err
+	}
+
+	if sub.StripeSubscriptionID == "" {
+		return repository.ErrSubscriptionNotFound
+	}
+
+	// すでに終了済みなら不可
+	if sub.EndedAt != nil {
+		return ErrSubscriptionNotCancelable
+	}
+
+	// 即時キャンセルを許可する状態
+	switch sub.Status {
+	case "active", "trialing":
+	default:
+		return ErrSubscriptionNotCancelable
+	}
+
+	if err := s.stripeClient.CancelImmediately(ctx, sub.StripeSubscriptionID); err != nil {
 		return err
 	}
 
@@ -199,5 +250,3 @@ func (s *SubscriptionService) ResumeMySubscription(
 
 	return nil
 }
-
-
