@@ -7,6 +7,7 @@ import (
 	"fmt"
 
 	"dscheckerapp/internal/model"
+
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
@@ -17,7 +18,6 @@ type UserRepository struct {
 func NewUserRepository(db *pgxpool.Pool) *UserRepository {
 	return &UserRepository{db: db}
 }
-
 
 func (r *UserRepository) FindByID(userID int64) (*model.User, error) {
 	var user model.User
@@ -155,8 +155,12 @@ func (r *UserRepository) GetUsers(ctx context.Context) ([]model.User, error) {
 	return users, rows.Err()
 }
 
+// 同じ clerk_user_id のユーザーを新規作成 or 更新する
 // 削除済みユーザーが、同じ clerk_user_id で再作成・再同期されたときに復活できるよう、deleted_at = NULL を入れる
 // user.created / user.updated が来た時に、そのユーザーが論理削除済みでも再有効化
+// user.created の初回同期
+// user.updated の同期
+// 何らかの理由で同じ Clerk ユーザーを再同期したいとき
 func (r *UserRepository) UpsertUser(ctx context.Context, user model.User) error {
 	query := `
 		INSERT INTO public.users (
@@ -186,7 +190,9 @@ func (r *UserRepository) UpsertUser(ctx context.Context, user model.User) error 
 func (r *UserRepository) DeleteUserByClerkID(ctx context.Context, clerkUserID string) error {
 	query := `
 		UPDATE public.users
-		SET deleted_at = NOW(),
+		SET 
+			status = 'deleted',
+			deleted_at = NOW(),
 		    updated_at = NOW()
 		WHERE clerk_user_id = $1
 	`
