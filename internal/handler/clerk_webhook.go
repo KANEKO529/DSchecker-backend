@@ -3,6 +3,7 @@ package handler
 import (
 	"encoding/json"
 	"io"
+	"log"
 	"net/http"
 	"os"
 
@@ -58,7 +59,9 @@ func (h *ClerkWebhookHandler) Handle(c *gin.Context) {
 			c.JSON(http.StatusBadRequest, gin.H{"error": "invalid user.created payload"})
 			return
 		}
+
 		if err := h.Service.HandleUserCreated(c.Request.Context(), payload); err != nil {
+			log.Printf("[CLERK WEBHOOK] failed to process user.created: err=%v", err)
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to process user.created"})
 			return
 		}

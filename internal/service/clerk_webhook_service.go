@@ -4,6 +4,7 @@ package service
 
 import (
 	"context"
+	"log"
 	"strings"
 
 	"dscheckerapp/internal/model"
@@ -18,6 +19,7 @@ func NewClerkWebhookService(userRepo *repository.UserRepository) *ClerkWebhookSe
 	return &ClerkWebhookService{UserRepo: userRepo}
 }
 
+// 新規追加時
 func (s *ClerkWebhookService) HandleUserCreated(ctx context.Context, payload model.ClerkUserPayload) error {
 	name := extractUserName(payload)
 
@@ -26,10 +28,23 @@ func (s *ClerkWebhookService) HandleUserCreated(ctx context.Context, payload mod
 		Email:       extractPrimaryEmail(payload),
 		UserName:    &name,
 		Role:        "user",
+		Status:      "active",
 	}
-	return s.UserRepo.UpsertUser(ctx, user)
+
+	err := s.UserRepo.CreateOrReRegisterUser(ctx, user)
+	if err != nil {
+		log.Printf("[CLERK WEBHOOK] HandleUserCreated failed: clerk_user_id=%s email=%s err=%v",
+			user.ClerkUserID, user.Email, err)
+		return err
+	}
+
+	log.Printf("[CLERK WEBHOOK] HandleUserCreated success: clerk_user_id=%s email=%s",
+		user.ClerkUserID, user.Email)
+
+	return nil
 }
 
+// 更新時
 func (s *ClerkWebhookService) HandleUserUpdated(ctx context.Context, payload model.ClerkUserPayload) error {
 	name := extractUserName(payload)
 
@@ -38,7 +53,7 @@ func (s *ClerkWebhookService) HandleUserUpdated(ctx context.Context, payload mod
 		Email:       extractPrimaryEmail(payload),
 		UserName:    &name,
 	}
-	return s.UserRepo.UpsertUser(ctx, user)
+	return s.UserRepo.UpdateUserByClerkID(ctx, user)
 }
 
 func (s *ClerkWebhookService) HandleUserDeleted(ctx context.Context, clerkUserID string) error {

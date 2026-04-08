@@ -11,7 +11,6 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
-
 var (
 	ErrSubscriptionNotFound = errors.New("subscription not found")
 )
@@ -40,6 +39,45 @@ func (r *SubscriptionRepository) FindByUserID(ctx context.Context, userID int64)
 
 // 最新のsubscriptionレコードを取得
 func (r *SubscriptionRepository) FindCurrentByUserID(ctx context.Context, userID int64) (*model.Subscription, error) {
+	// 全レコードの中から優先順位をつけて1件選ぶ
+	// active / trialing → 優先度 0
+	// 解約予約中だけどまだ有効期間内 → 優先度 1
+	// それ以外（終了済み・キャンセル済み・失敗など） → 優先度 2
+
+	// const q = `
+	// 	SELECT
+	// 		id,
+	// 		user_id,
+	// 		stripe_customer_id,
+	// 		stripe_subscription_id,
+	// 		stripe_price_id,
+	// 		status,
+	// 		current_period_start,
+	// 		current_period_end,
+	// 		cancel_at_period_end,
+	// 		canceled_at,
+	// 		ended_at,
+	// 		latest_event_id,
+	// 		created_at,
+	// 		updated_at
+	// 	FROM subscriptions
+	// 	WHERE user_id = $1
+	// 	ORDER BY
+	// 		CASE
+	// 			WHEN status IN ('active', 'trialing') THEN 0
+	// 			WHEN cancel_at_period_end = true
+	// 			     AND current_period_end IS NOT NULL
+	// 			     AND current_period_end > now() THEN 1
+	// 			ELSE 2
+	// 		END,
+	// 		current_period_end DESC NULLS LAST,
+	// 		created_at DESC
+	// 	LIMIT 1
+	// `
+
+	// 有効候補だけに絞ってから1件選ぶ
+	// まずWHEREで,active/trialing/解約予約中だがまだ期限内/ だけに絞る
+	// 後に,その候補の中で,current_period_end が新しい順→created_at が新しい順　で1件返す
 	const q = `
 		SELECT
 			id,
@@ -58,16 +96,15 @@ func (r *SubscriptionRepository) FindCurrentByUserID(ctx context.Context, userID
 			updated_at
 		FROM subscriptions
 		WHERE user_id = $1
-		ORDER BY
-			CASE
-				WHEN status IN ('active', 'trialing') THEN 0
-				WHEN cancel_at_period_end = true
-				     AND current_period_end IS NOT NULL
-				     AND current_period_end > now() THEN 1
-				ELSE 2
-			END,
-			current_period_end DESC NULLS LAST,
-			created_at DESC
+		AND (
+			status IN ('active', 'trialing')
+			OR (
+			cancel_at_period_end = true
+			AND current_period_end IS NOT NULL
+			AND current_period_end > now()
+			)
+		)
+		ORDER BY current_period_end DESC NULLS LAST, created_at DESC
 		LIMIT 1
 	`
 
