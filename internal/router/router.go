@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"dscheckerapp/internal/auth"
+	"dscheckerapp/internal/client"
 	"dscheckerapp/internal/handler"
 	"dscheckerapp/internal/lib"
 	"dscheckerapp/internal/middleware"
@@ -25,6 +26,8 @@ func SetupRouter(db *pgxpool.Pool, stripeCfg *lib.StripeConfig, clerkCfg *lib.Cl
 	if frontendOrigin == "" {
 		frontendOrigin = "http://localhost:3000"
 	}
+	kotoDBBaseURL := os.Getenv("KOTODB_API_BASE_URL")
+	kotoDBInternalAPIKey := os.Getenv("KOTODB_INTERNAL_API_KEY")
 
 	r.Use(cors.New(cors.Config{
 		AllowOrigins:     []string{frontendOrigin},
@@ -37,6 +40,8 @@ func SetupRouter(db *pgxpool.Pool, stripeCfg *lib.StripeConfig, clerkCfg *lib.Cl
 
 	r.GET("/health", handler.Health)
 
+	kotoDBClient := client.NewKotoDBClient(kotoDBBaseURL, kotoDBInternalAPIKey)
+
 	// lib
 	stripeClient := lib.NewStripeClient()
 	clerkClient := lib.NewClerkClient(clerkCfg)
@@ -44,6 +49,7 @@ func SetupRouter(db *pgxpool.Pool, stripeCfg *lib.StripeConfig, clerkCfg *lib.Cl
 	// repository
 	userRepo := repository.NewUserRepository(db)
 	subscriptionRepo := repository.NewSubscriptionRepository(db)
+	usageLogRepo := repository.NewUsageLogRepository(db)
 
 	// service
 	meService := service.NewMeService(clerkClient, userRepo)
@@ -61,9 +67,15 @@ func SetupRouter(db *pgxpool.Pool, stripeCfg *lib.StripeConfig, clerkCfg *lib.Cl
 		subscriptionRepo,
 		stripeClient,
 	)
+	priceSearchService := service.NewPriceSearchService(
+		usageLogRepo,
+		subscriptionRepo,
+		kotoDBClient,
+	)
 
 	// handler
 	userHandler := handler.NewUserHandler(userRepo)
+	priceSearchHandler := handler.NewPriceSearchHandler(priceSearchService)
 
 	meHandler := handler.NewMeHandler(meService, accountService)
 	clerkWebhookHandler := handler.NewClerkWebhookHandler(clerkWebhookService)
@@ -79,15 +91,18 @@ func SetupRouter(db *pgxpool.Pool, stripeCfg *lib.StripeConfig, clerkCfg *lib.Cl
 		log.Fatalf("failed to initialize clerk verifier: %v", err)
 	}
 
-	authMiddleware := middleware.NewAuthMiddleware(verifier)
+	authMiddleware := middleware.NewAuthMiddleware(verifier, userRepo)
 
 	api := r.Group("/api/v1")
 	{
 		api.GET("/users", userHandler.GetUsers)
 		api.POST("/webhooks/clerk", clerkWebhookHandler.Handle)
 		api.POST("/webhooks/stripe", stripeWebhookHandler.Handle)
+		// RequireAuth()は、トークンがあれば検証、401にしない
+		api.POST("/price-searches", authMiddleware.OptionalAuth(), priceSearchHandler.Create)
 
 		protected := api.Group("")
+		// RequireAuth()はトークン必須、必ずログイン済みユーザを通したい時、なければ401
 		protected.Use(authMiddleware.RequireAuth())
 		{
 			protected.GET("/me", meHandler.Me)
@@ -104,6 +119,7 @@ func SetupRouter(db *pgxpool.Pool, stripeCfg *lib.StripeConfig, clerkCfg *lib.Cl
 			// protected.GET("/billing/payment-methods", billingHandler.GetPaymentMethods)
 			// protected.GET("/billing/invoices", billingHandler.GetListInvoices)
 			protected.POST("/billing/customer-portal", billingHandler.CreateCustomerPortal)
+
 		}
 	}
 

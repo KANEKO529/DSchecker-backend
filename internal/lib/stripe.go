@@ -1,4 +1,6 @@
 // internal/lib/stripe.go
+// 外部サービスSDKラッパー（決済）
+
 // Stripe設定読込
 // stripe.Key 初期化
 package lib

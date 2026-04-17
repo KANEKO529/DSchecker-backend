@@ -130,10 +130,6 @@ func (h *MeHandler) UpdateMyProfile(c *gin.Context) {
 		return
 	}
 
-	log.Printf("req ", req)
-
-	log.Printf("[UpdateMyProfile] req firstName=%q lastName=%q", req.FirstName, req.LastName)
-
 	clerkUserIDValue, exists := c.Get("clerk_user_id")
 	if !exists {
 		c.JSON(http.StatusUnauthorized, gin.H{

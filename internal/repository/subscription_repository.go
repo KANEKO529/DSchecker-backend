@@ -23,6 +23,65 @@ func NewSubscriptionRepository(db *pgxpool.Pool) *SubscriptionRepository {
 	return &SubscriptionRepository{db: db}
 }
 
+// 回数制御、権限制御用
+func (r *SubscriptionRepository) FindActiveByUserID(ctx context.Context, userID int64) (*model.Subscription, error) {
+	const q = `
+		SELECT
+			id,
+			user_id,
+			stripe_customer_id,
+			stripe_subscription_id,
+			stripe_price_id,
+			status,
+			current_period_start,
+			current_period_end,
+			cancel_at_period_end,
+			canceled_at,
+			ended_at,
+			latest_event_id,
+			created_at,
+			updated_at
+		FROM subscriptions
+		WHERE user_id = $1
+		  AND (
+			status IN ('active', 'trialing')
+			OR (
+				cancel_at_period_end = true
+				AND current_period_end IS NOT NULL
+				AND current_period_end > now()
+			)
+		  )
+		ORDER BY current_period_end DESC NULLS LAST, created_at DESC
+		LIMIT 1
+	`
+
+	var sub model.Subscription
+	err := r.db.QueryRow(ctx, q, userID).Scan(
+		&sub.ID,
+		&sub.UserID,
+		&sub.StripeCustomerID,
+		&sub.StripeSubscriptionID,
+		&sub.StripePriceID,
+		&sub.Status,
+		&sub.CurrentPeriodStart,
+		&sub.CurrentPeriodEnd,
+		&sub.CancelAtPeriodEnd,
+		&sub.CanceledAt,
+		&sub.EndedAt,
+		&sub.LatestEventID,
+		&sub.CreatedAt,
+		&sub.UpdatedAt,
+	)
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return nil, nil
+		}
+		return nil, err
+	}
+
+	return &sub, nil
+}
+
 // checkout 用
 // FindByUserID returns the current subscription for the user.
 // If no current subscription exists, it returns nil, nil.
@@ -38,46 +97,8 @@ func (r *SubscriptionRepository) FindByUserID(ctx context.Context, userID int64)
 }
 
 // 最新のsubscriptionレコードを取得
+// マイページのサブスクリプションの管理で使用
 func (r *SubscriptionRepository) FindCurrentByUserID(ctx context.Context, userID int64) (*model.Subscription, error) {
-	// 全レコードの中から優先順位をつけて1件選ぶ
-	// active / trialing → 優先度 0
-	// 解約予約中だけどまだ有効期間内 → 優先度 1
-	// それ以外（終了済み・キャンセル済み・失敗など） → 優先度 2
-
-	// const q = `
-	// 	SELECT
-	// 		id,
-	// 		user_id,
-	// 		stripe_customer_id,
-	// 		stripe_subscription_id,
-	// 		stripe_price_id,
-	// 		status,
-	// 		current_period_start,
-	// 		current_period_end,
-	// 		cancel_at_period_end,
-	// 		canceled_at,
-	// 		ended_at,
-	// 		latest_event_id,
-	// 		created_at,
-	// 		updated_at
-	// 	FROM subscriptions
-	// 	WHERE user_id = $1
-	// 	ORDER BY
-	// 		CASE
-	// 			WHEN status IN ('active', 'trialing') THEN 0
-	// 			WHEN cancel_at_period_end = true
-	// 			     AND current_period_end IS NOT NULL
-	// 			     AND current_period_end > now() THEN 1
-	// 			ELSE 2
-	// 		END,
-	// 		current_period_end DESC NULLS LAST,
-	// 		created_at DESC
-	// 	LIMIT 1
-	// `
-
-	// 有効候補だけに絞ってから1件選ぶ
-	// まずWHEREで,active/trialing/解約予約中だがまだ期限内/ だけに絞る
-	// 後に,その候補の中で,current_period_end が新しい順→created_at が新しい順　で1件返す
 	const q = `
 		SELECT
 			id,

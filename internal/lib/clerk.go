@@ -1,4 +1,5 @@
 // internal/lib/clerk.go
+// 外部サービスSDKラッパー（認証）
 package lib
 
 import (
