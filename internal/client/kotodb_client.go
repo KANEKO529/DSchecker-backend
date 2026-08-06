@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"log"
 	"net/http"
 	"net/url"
 	"time"
@@ -67,16 +68,48 @@ func (c *KotoDBClient) SearchByModelNumber(ctx context.Context, modelNumber stri
 		req.Header.Set("X-Internal-API-Key", c.APIKey)
 	}
 
+	// T5：Rails APIへのHTTP通信開始
+	t5StartedAt := time.Now()
+
 	resp, err := c.HTTPClient.Do(req)
 	if err != nil {
+		t5Ms := float64(time.Since(t5StartedAt).Microseconds()) / 1000
+
+		log.Printf(
+			"[OCR_MEASUREMENT] model_number=%s T5_ms=%.3f status=request_failed error=%v",
+			modelNumber,
+			t5Ms,
+			err,
+		)
+
 		return nil, err
 	}
 	defer resp.Body.Close()
 
 	var result SearchByModelNumberResponse
 	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+		t5Ms := float64(time.Since(t5StartedAt).Microseconds()) / 1000
+
+		log.Printf(
+			"[OCR_MEASUREMENT] model_number=%s T5_ms=%.3f status=decode_failed http_status=%d error=%v",
+			modelNumber,
+			t5Ms,
+			resp.StatusCode,
+			err,
+		)
+
 		return nil, err
 	}
+
+	// T5：RailsレスポンスのJSON解析完了
+	t5Ms := float64(time.Since(t5StartedAt).Microseconds()) / 1000
+
+	log.Printf(
+		"[OCR_MEASUREMENT] model_number=%s T5_ms=%.3f http_status=%d",
+		modelNumber,
+		t5Ms,
+		resp.StatusCode,
+	)
 
 	switch resp.StatusCode {
 	case http.StatusOK:

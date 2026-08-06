@@ -156,57 +156,6 @@ func (r *SubscriptionRepository) FindCurrentByUserID(ctx context.Context, userID
 	return &sub, nil
 }
 
-// me/subscription 用 使わない
-// func (r *SubscriptionRepository) FindLatestByUserID(ctx context.Context, userID int64) (*model.Subscription, error) {
-// 	const q = `
-// 		SELECT
-// 			id,
-// 			user_id,
-// 			stripe_customer_id,
-// 			stripe_subscription_id,
-// 			stripe_price_id,
-// 			status,
-// 			current_period_start,
-// 			current_period_end,
-// 			cancel_at_period_end,
-// 			canceled_at,
-// 			ended_at,
-// 			latest_event_id,
-// 			created_at,
-// 			updated_at
-// 		FROM subscriptions
-// 		WHERE user_id = $1
-// 		ORDER BY updated_at DESC
-// 		LIMIT 1
-// 	`
-
-// 	var sub model.Subscription
-// 	err := r.db.QueryRow(ctx, q, userID).Scan(
-// 		&sub.ID,
-// 		&sub.UserID,
-// 		&sub.StripeCustomerID,
-// 		&sub.StripeSubscriptionID,
-// 		&sub.StripePriceID,
-// 		&sub.Status,
-// 		&sub.CurrentPeriodStart,
-// 		&sub.CurrentPeriodEnd,
-// 		&sub.CancelAtPeriodEnd,
-// 		&sub.CanceledAt,
-// 		&sub.EndedAt,
-// 		&sub.LatestEventID,
-// 		&sub.CreatedAt,
-// 		&sub.UpdatedAt,
-// 	)
-// 	if err != nil {
-// 		if errors.Is(err, pgx.ErrNoRows) {
-// 			return nil, ErrSubscriptionNotFound
-// 		}
-// 		return nil, err
-// 	}
-
-// 	return &sub, nil
-// }
-
 func (r *SubscriptionRepository) FindUserIDByStripeCustomerID(ctx context.Context, customerID string) (int64, error) {
 	var userID int64
 	err := r.db.QueryRow(ctx, `
